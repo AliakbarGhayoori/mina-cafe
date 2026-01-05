@@ -1,19 +1,20 @@
 # Frontend Dockerfile for Mina Cafe
-# Optimized for PaaS deployment (DigitalOcean App Platform, etc.)
+# Optimized for PaaS deployment (Hamravesh, etc.)
+# NOTE: This Dockerfile is built from repo root with context at root
 
 # Build stage - use regular node image for better Next.js compatibility
 FROM node:20 AS builder
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Copy package files from frontend/
+COPY frontend/package*.json ./
 
 # Install dependencies
-RUN npm ci && npm cache clean --force
+RUN npm install && npm cache clean --force
 
-# Copy source code
-COPY . .
+# Copy source code from frontend/
+COPY frontend/ .
 
 # Build arguments for environment variables (set at build time)
 ARG NEXT_PUBLIC_API_URL

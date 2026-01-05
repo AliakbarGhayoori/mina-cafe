@@ -1,13 +1,14 @@
 # Backend Dockerfile for Mina Cafe API
-# Optimized for PaaS deployment (DigitalOcean App Platform, etc.)
+# Optimized for PaaS deployment (Hamravesh, etc.)
+# NOTE: This Dockerfile is built from repo root with context at root
 
 # Build stage
 FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Copy package files from backend/
+COPY backend/package*.json ./
 
 # Install dependencies (production only)
 RUN npm install --omit=dev && npm cache clean --force
@@ -25,8 +26,8 @@ RUN addgroup -g 1001 -S nodejs && \
 # Copy dependencies from builder
 COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
 
-# Copy application code
-COPY --chown=nodejs:nodejs . .
+# Copy application code from backend/
+COPY --chown=nodejs:nodejs backend/ .
 
 # Create uploads directory with proper permissions
 RUN mkdir -p uploads && chown -R nodejs:nodejs uploads
