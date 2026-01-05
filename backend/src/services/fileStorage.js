@@ -1,4 +1,5 @@
 const fs = require("fs").promises;
+const fsSync = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 
@@ -7,7 +8,10 @@ const crypto = require("crypto");
  * Files are saved to the uploads directory and served via Express static middleware.
  */
 
-const uploadsDir = path.join(__dirname, "..", "..", "uploads");
+// Use persistent disk if available, otherwise fallback to local uploads dir
+const PERSISTENT_UPLOADS = "/var/lib/data/uploads";
+const LOCAL_UPLOADS = path.join(__dirname, "..", "..", "uploads");
+const uploadsDir = fsSync.existsSync("/var/lib/data") ? PERSISTENT_UPLOADS : LOCAL_UPLOADS;
 const baseUrl = process.env.BASE_URL || "http://localhost:4000";
 
 // Ensure uploads directory exists

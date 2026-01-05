@@ -2,26 +2,65 @@ const fs = require("fs");
 const path = require("path");
 const bcrypt = require("bcrypt");
 
-const DB_PATH = path.join(__dirname, "..", "data", "db.json");
+// Use persistent disk if available, otherwise fallback to local data dir
+const PERSISTENT_PATH = "/var/lib/data/db.json";
+const LOCAL_PATH = path.join(__dirname, "..", "data", "db.json");
+const DB_PATH = fs.existsSync("/var/lib/data") ? PERSISTENT_PATH : LOCAL_PATH;
+
+// Ensure parent directory exists
+const dbDir = path.dirname(DB_PATH);
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+}
 
 // Simple ID generator
 const generateId = () => {
   return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
 };
 
-// Read database
+// In-memory cache to reduce disk reads
+let dbCache = null;
+let cacheTime = 0;
+const CACHE_TTL = 1000; // 1 second cache
+
+// Read database with caching
 const readDb = () => {
+  const now = Date.now();
+  if (dbCache && (now - cacheTime) < CACHE_TTL) {
+    return dbCache;
+  }
+
   try {
     const data = fs.readFileSync(DB_PATH, "utf8");
-    return JSON.parse(data);
+    dbCache = JSON.parse(data);
+    cacheTime = now;
+    return dbCache;
   } catch (err) {
-    return { admins: [], users: [], categories: [], products: [] };
+    dbCache = { admins: [], users: [], categories: [], products: [] };
+    cacheTime = now;
+    return dbCache;
   }
 };
 
-// Write database
+// Write database with atomic write (write to temp file, then rename)
 const writeDb = (data) => {
-  fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), "utf8");
+  const tempPath = DB_PATH + ".tmp";
+  fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), "utf8");
+  fs.renameSync(tempPath, DB_PATH);
+  // Update cache
+  dbCache = data;
+  cacheTime = Date.now();
+};
+
+// Helper for targeted collection updates
+const updateCollection = (collectionName, updateFn) => {
+  const db = readDb();
+  const result = updateFn(db[collectionName]);
+  if (result.changed) {
+    db[collectionName] = result.data;
+    writeDb(db);
+  }
+  return result.value;
 };
 
 // Admin operations
@@ -203,7 +242,7 @@ const Product = {
         const category = db.categories.find((c) => c.id === p.categoryId);
         return {
           ...p,
-          categoryId: category
+          category: category
             ? { id: category.id, titleEn: category.titleEn, titleFa: category.titleFa, icon: category.icon }
             : null,
         };
@@ -262,7 +301,7 @@ const Product = {
     const category = db.categories.find((c) => c.id === product.categoryId);
     return {
       ...product,
-      categoryId: category
+      category: category
         ? { id: category.id, titleEn: category.titleEn, titleFa: category.titleFa, icon: category.icon }
         : null,
     };

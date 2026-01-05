@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const path = require("path");
+const fs = require("fs");
 
 dotenv.config();
 
@@ -16,8 +17,11 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Static files (for any local uploads if needed)
-app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
+// Static files - use persistent disk if available
+const PERSISTENT_UPLOADS = "/var/lib/data/uploads";
+const LOCAL_UPLOADS = path.join(__dirname, "..", "uploads");
+const uploadsDir = fs.existsSync("/var/lib/data") ? PERSISTENT_UPLOADS : LOCAL_UPLOADS;
+app.use("/uploads", express.static(uploadsDir));
 
 // Routes
 app.use("/api/auth", authRoutes);
