@@ -1,6 +1,6 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
-const { Admin, User } = require("../models");
+const { Admin, User } = require("../services/jsonStore");
 const { sendOtp } = require("../services/kavenegar");
 const { adminAuth } = require("../middleware/auth");
 
@@ -30,7 +30,7 @@ router.post("/admin/login", async (req, res, next) => {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
-    const isMatch = await admin.comparePassword(password);
+    const isMatch = await Admin.comparePassword(admin, password);
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
@@ -75,7 +75,7 @@ router.post("/user/send-otp", async (req, res, next) => {
     } else {
       user.otpCode = code;
       user.otpExpires = expires;
-      await user.save();
+      await User.save(user);
     }
 
     await sendOtp(mobile, code);
@@ -100,7 +100,7 @@ router.post("/user/verify-otp", async (req, res, next) => {
       !user.otpCode ||
       user.otpCode !== code ||
       !user.otpExpires ||
-      user.otpExpires < new Date()
+      new Date(user.otpExpires) < new Date()
     ) {
       return res.status(400).json({ message: "Invalid or expired code" });
     }
@@ -108,9 +108,8 @@ router.post("/user/verify-otp", async (req, res, next) => {
     user.isVerified = true;
     user.otpCode = null;
     user.otpExpires = null;
-    await user.save();
+    await User.save(user);
 
-    // For website users we can issue a simple token (or just confirm login).
     const token = jwt.sign(
       { sub: user.id, mobile: user.mobile, role: "user" },
       process.env.JWT_SECRET,

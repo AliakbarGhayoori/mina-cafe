@@ -1,5 +1,5 @@
 const express = require("express");
-const { Category } = require("../models");
+const { Category } = require("../services/jsonStore");
 const { adminAuth } = require("../middleware/auth");
 const { uploadImage } = require("../middleware/upload");
 
@@ -8,7 +8,7 @@ const router = express.Router();
 // Public: list categories
 router.get("/", async (req, res, next) => {
   try {
-    const categories = await Category.find().sort({ createdAt: 1 });
+    const categories = await Category.find();
     return res.json(categories);
   } catch (err) {
     return next(err);
@@ -19,12 +19,12 @@ router.get("/", async (req, res, next) => {
 router.post("/", adminAuth, uploadImage("image"), async (req, res, next) => {
   try {
     const { titleEn, titleFa, descEn, descFa, icon } = req.body;
-    const category = await Category.create({ 
-      titleEn, 
-      titleFa, 
-      descEn, 
-      descFa, 
-      icon: req.fileUrl || icon || "" 
+    const category = await Category.create({
+      titleEn,
+      titleFa,
+      descEn,
+      descFa,
+      icon: req.fileUrl || icon || "",
     });
     return res.status(201).json(category);
   } catch (err) {
@@ -50,8 +50,8 @@ router.put("/:id", adminAuth, uploadImage("image"), async (req, res, next) => {
     } else if (icon !== undefined) {
       category.icon = icon;
     }
-    await category.save();
-    return res.json(category);
+    const updated = await Category.save(category);
+    return res.json(updated);
   } catch (err) {
     return next(err);
   }

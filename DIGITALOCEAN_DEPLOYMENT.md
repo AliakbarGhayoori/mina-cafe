@@ -1,6 +1,6 @@
 # DigitalOcean App Platform Deployment Guide
 
-This guide explains how to deploy Mina Cafe on DigitalOcean App Platform as separate services.
+This guide explains how to deploy Mina Cafe on DigitalOcean App Platform as two services (no database needed).
 
 ## Architecture Overview
 
@@ -13,33 +13,21 @@ This guide explains how to deploy Mina Cafe on DigitalOcean App Platform as sepa
 │  │   Port: 3000    │   API   │   Port: 4000    │           │
 │  └─────────────────┘         └─────────────────┘           │
 │                                      │                      │
-└──────────────────────────────────────│──────────────────────┘
-                                       │
-                                       ▼
-                          ┌─────────────────────┐
-                          │   MongoDB Atlas     │
-                          │  (External DB)      │
-                          └─────────────────────┘
+│                              ┌───────┴───────┐              │
+│                              │  db.json file │              │
+│                              │ (JSON storage)│              │
+│                              └───────────────┘              │
+└─────────────────────────────────────────────────────────────┘
 ```
+
+**No external database needed!** Data is stored in a JSON file.
 
 ## Prerequisites
 
 1. DigitalOcean account
 2. GitHub repository with your code
-3. MongoDB Atlas account (DigitalOcean doesn't have managed MongoDB)
 
-## Step 1: Set Up MongoDB Atlas
-
-1. Go to [MongoDB Atlas](https://cloud.mongodb.com)
-2. Create a free cluster
-3. Create a database user
-4. Whitelist all IPs: `0.0.0.0/0` (for App Platform dynamic IPs)
-5. Get your connection string:
-   ```
-   mongodb+srv://<username>:<password>@<cluster>.mongodb.net/mina-cafe?retryWrites=true&w=majority
-   ```
-
-## Step 2: Deploy Backend Service
+## Step 1: Deploy Backend Service
 
 1. Go to [DigitalOcean App Platform](https://cloud.digitalocean.com/apps)
 2. Click **Create App**
@@ -63,17 +51,16 @@ This guide explains how to deploy Mina Cafe on DigitalOcean App Platform as sepa
    |----------|------|-------|
    | `PORT` | Plain | `4000` |
    | `NODE_ENV` | Plain | `production` |
-   | `MONGODB_URI` | Secret | Your MongoDB Atlas connection string |
    | `JWT_SECRET` | Secret | A strong random string (32+ chars) |
-   | `KAVENEGAR_API_KEY` | Secret | Your Kavenegar API key |
-   | `BASE_URL` | Plain | Will be set after deployment (e.g., `https://backend-xxxxx.ondigitalocean.app`) |
+   | `KAVENEGAR_API_KEY` | Secret | Your Kavenegar API key (optional, for OTP) |
+   | `BASE_URL` | Plain | Will be set after deployment |
 
 5. Click **Create Resources**
 6. Wait for deployment to complete
 7. Note the backend URL (e.g., `https://backend-xxxxx.ondigitalocean.app`)
 8. Go back and update `BASE_URL` environment variable with the actual URL
 
-## Step 3: Deploy Frontend Service
+## Step 2: Deploy Frontend Service
 
 1. Create another App or add a component to existing app
 2. Connect the same GitHub repository
@@ -101,6 +88,18 @@ This guide explains how to deploy Mina Cafe on DigitalOcean App Platform as sepa
 4. Click **Create Resources**
 5. Wait for deployment to complete
 
+## Step 3: Create Admin Account
+
+After deployment, create your admin account by calling the register endpoint:
+
+```bash
+curl -X POST https://your-backend-url.ondigitalocean.app/api/auth/admin/register \
+  -H "Content-Type: application/json" \
+  -d '{"email": "admin@example.com", "password": "your-password", "name": "Admin"}'
+```
+
+Then login at `https://your-frontend-url/admin/login`
+
 ## Step 4: Configure Custom Domain (Optional)
 
 ### For Backend:
@@ -116,24 +115,25 @@ This guide explains how to deploy Mina Cafe on DigitalOcean App Platform as sepa
 3. Add your domain: `yourdomain.com` or `menu.yourdomain.com`
 4. Update DNS records as instructed
 
-## File Uploads Note
+## Important Notes
 
-DigitalOcean App Platform uses ephemeral storage - uploaded files will be lost on redeploy.
+### Data Persistence
+The JSON file (`db.json`) stores all data. On DigitalOcean App Platform:
+- Data persists between container restarts
+- Data is **lost on redeploy** (new container is created)
+
+**For production with data persistence:**
+- Export your data before redeploying
+- Consider adding a backup/restore script
+- Or use DigitalOcean Managed Database (PostgreSQL) if you need persistence
+
+### File Uploads
+Uploaded images are stored locally and will be **lost on redeploy**.
 
 **Solutions:**
-
-1. **DigitalOcean Spaces (Recommended):**
-   - Create a Space in DigitalOcean
-   - Update backend to use S3-compatible storage
-   - Install `@aws-sdk/client-s3`:
-     ```bash
-     npm install @aws-sdk/client-s3
-     ```
-   - Update `fileStorage.js` to use Spaces
-
-2. **External Storage:**
-   - Use Cloudinary, AWS S3, or similar
-   - Update the file upload logic accordingly
+1. **DigitalOcean Spaces:** Use S3-compatible storage
+2. **Cloudinary/AWS S3:** External image hosting
+3. **Use image URLs:** Host images elsewhere and just store URLs
 
 ## Environment Variables Summary
 
@@ -141,9 +141,8 @@ DigitalOcean App Platform uses ephemeral storage - uploaded files will be lost o
 ```env
 PORT=4000
 NODE_ENV=production
-MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/mina-cafe
 JWT_SECRET=your-super-secret-jwt-key-min-32-chars
-KAVENEGAR_API_KEY=your-kavenegar-api-key
+KAVENEGAR_API_KEY=your-kavenegar-api-key  # optional
 BASE_URL=https://your-backend-url.ondigitalocean.app
 ```
 
@@ -152,34 +151,17 @@ BASE_URL=https://your-backend-url.ondigitalocean.app
 NEXT_PUBLIC_API_URL=https://your-backend-url.ondigitalocean.app/api
 ```
 
-## Deployment Commands (Alternative: Using doctl CLI)
-
-```bash
-# Install doctl
-brew install doctl  # macOS
-
-# Authenticate
-doctl auth init
-
-# Create backend app from spec
-doctl apps create --spec backend-app.yaml
-
-# Create frontend app from spec
-doctl apps create --spec frontend-app.yaml
-```
-
 ## Troubleshooting
 
 ### Backend Issues
 
-**"Cannot connect to MongoDB"**
-- Verify MongoDB Atlas whitelist includes `0.0.0.0/0`
-- Check connection string format
-- Verify database user credentials
-
 **"Health check failed"**
 - Check `/api/health` endpoint is working
-- Review deployment logs: `doctl apps logs <app-id>`
+- Review deployment logs in DO dashboard
+
+**"Cannot write to db.json"**
+- Check file permissions in Dockerfile
+- Ensure data directory exists
 
 ### Frontend Issues
 
@@ -192,22 +174,12 @@ doctl apps create --spec frontend-app.yaml
 - Check Node.js version compatibility
 - Review build logs for specific errors
 
-## Monitoring
-
-1. Go to your app in DigitalOcean dashboard
-2. Check **Runtime Logs** for application logs
-3. Check **Insights** for metrics and performance
-4. Set up **Alerts** for notifications
-
 ## Cost Estimate
 
 | Service | Size | Monthly Cost |
 |---------|------|--------------|
 | Backend | Basic (512MB RAM) | $5 |
 | Frontend | Basic (512MB RAM) | $5 |
-| MongoDB Atlas | M0 Free Tier | $0 |
 | **Total** | | **$10/month** |
 
-For production workloads, consider upgrading to:
-- Professional instances ($12+/month each)
-- MongoDB Atlas M10+ ($57+/month)
+No database costs since we use JSON file storage!

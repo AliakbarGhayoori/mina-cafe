@@ -1,5 +1,5 @@
 const express = require("express");
-const { Product, Category } = require("../models");
+const { Product } = require("../services/jsonStore");
 const { adminAuth } = require("../middleware/auth");
 const { uploadImage } = require("../middleware/upload");
 
@@ -10,34 +10,26 @@ router.get("/", async (req, res, next) => {
   try {
     const { category, search, page = 1, limit = 10, special } = req.query;
 
-    const where = { status: "active" };
+    const query = { status: "active" };
     if (category) {
-      where.categoryId = category;
+      query.categoryId = category;
     }
     if (special === "true") {
-      where.special = true;
+      query.special = true;
     }
     if (search) {
-      where.$or = [
-        { titleEn: { $regex: search, $options: "i" } },
-        { titleFa: { $regex: search, $options: "i" } },
-        { descEn: { $regex: search, $options: "i" } },
-        { descFa: { $regex: search, $options: "i" } },
-      ];
+      query.search = search;
     }
 
     const pageNum = Number(page) || 1;
     const limitNum = Number(limit) || 10;
     const skip = (pageNum - 1) * limitNum;
 
-    const [items, total] = await Promise.all([
-      Product.find(where)
-        .populate("categoryId", "titleEn titleFa icon")
-        .sort({ special: -1, orderingShowInList: 1, createdAt: -1 })
-        .limit(limitNum)
-        .skip(skip),
-      Product.countDocuments(where),
-    ]);
+    const { items, total } = await Product.find(query, {
+      skip,
+      limit: limitNum,
+      populate: true,
+    });
 
     return res.json({
       items,
@@ -71,19 +63,17 @@ router.post("/", adminAuth, uploadImage("image"), async (req, res, next) => {
       titleFa,
       descEn,
       descFa,
-      price,
-      discount,
-      status,
-      orderingShowInList,
-      special,
+      price: Number(price),
+      discount: Number(discount) || 0,
+      status: status || "active",
+      orderingShowInList: Number(orderingShowInList) || 0,
+      special: special === "true" || special === true,
       categoryId: category,
       image: req.fileUrl || "",
     });
 
-    // Populate category
-    await product.populate("categoryId", "titleEn titleFa icon");
-
-    return res.status(201).json(product);
+    const populated = await Product.populate(product);
+    return res.status(201).json(populated);
   } catch (err) {
     return next(err);
   }
@@ -115,23 +105,20 @@ router.put("/:id", adminAuth, uploadImage("image"), async (req, res, next) => {
     product.titleFa = titleFa;
     product.descEn = descEn;
     product.descFa = descFa;
-    product.price = price;
-    product.discount = discount;
+    product.price = Number(price);
+    product.discount = Number(discount) || 0;
     product.status = status;
-    product.orderingShowInList = orderingShowInList;
-    product.special = special;
+    product.orderingShowInList = Number(orderingShowInList) || 0;
+    product.special = special === "true" || special === true;
     product.categoryId = category;
 
     if (req.fileUrl) {
       product.image = req.fileUrl;
     }
 
-    await product.save();
-
-    // Populate category
-    await product.populate("categoryId", "titleEn titleFa icon");
-
-    return res.json(product);
+    const saved = await Product.save(product);
+    const populated = await Product.populate(saved);
+    return res.json(populated);
   } catch (err) {
     return next(err);
   }

@@ -5,9 +5,6 @@ const path = require("path");
 
 dotenv.config();
 
-const { connectDb } = require("./config/database");
-require("./models"); // Load Mongoose models
-
 const authRoutes = require("./routes/auth");
 const categoryRoutes = require("./routes/categories");
 const productRoutes = require("./routes/products");
@@ -43,15 +40,8 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 4000;
 
-connectDb()
-  .then(() => {
-    app.listen(PORT, () => {
-      console.log(`Mina Cafe API listening on port ${PORT}`);
-    });
-  })
-  .catch((err) => {
-    console.error("Failed to connect to database", err);
-    process.exit(1);
-  });
+app.listen(PORT, () => {
+  console.log(`Mina Cafe API listening on port ${PORT}`);
+});
 
 
